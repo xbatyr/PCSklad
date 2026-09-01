@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -17,11 +18,12 @@ from database import Base
 
 # --- Справочники -------------------------------------------------------------
 
-ITEM_TYPES = ("component", "periphery")
+ITEM_TYPES = ("component", "periphery", "service")
 
-COMPONENT_CATEGORIES = ("CPU", "GPU", "RAM", "SSD", "Motherboard", "PSU", "Case", "Cooler")
+COMPONENT_CATEGORIES = ("CPU", "GPU", "RAM", "SSD", "HDD", "Motherboard", "PSU", "Case", "Cooler")
 PERIPHERY_CATEGORIES = ("Monitor", "Mouse", "Keyboard", "Headset", "Speakers", "Microphone", "Mousepad")
-CATEGORIES = COMPONENT_CATEGORIES + PERIPHERY_CATEGORIES + ("Other",)
+SERVICE_CATEGORIES = ("Repair", "Maintenance", "Assembly", "Diagnostics", "Software")
+CATEGORIES = COMPONENT_CATEGORIES + PERIPHERY_CATEGORIES + SERVICE_CATEGORIES + ("Other",)
 
 PC_STATUSES = ("in_stock", "sold")
 ITEM_STATUSES = ("in_stock", "in_assembly", "sold")
@@ -45,6 +47,7 @@ class PC(Base):
     sell_price = Column(Integer, nullable=False, default=0)
     status = Column(String(20), nullable=False, default="in_stock", index=True)
     created_at = Column(DateTime, nullable=False, default=now)
+    updated_at = Column(DateTime, nullable=False, default=now, onupdate=now)
     sold_at = Column(DateTime, nullable=True)
 
     items = relationship(
@@ -69,7 +72,7 @@ class PC(Base):
 
 
 class Item(Base):
-    """Комплектующая или периферия: на складе, в сборке или продана."""
+    """Комплектующая, периферия или услуга: на складе, в сборке или продана."""
 
     __tablename__ = "items"
 
@@ -81,13 +84,21 @@ class Item(Base):
     cost_price = Column(Integer, nullable=False, default=0)
     retail_price = Column(Integer, nullable=True)
     status = Column(String(20), nullable=False, default="in_stock", index=True)
+
+    # Откуда пришла позиция: «б/у системник от клиента, 12.03», номер закупа и т.п.
+    source_note = Column(Text, nullable=True)
+
+    purchased_at = Column(DateTime, nullable=True)   # дата закупа, задаётся вручную
     created_at = Column(DateTime, nullable=False, default=now)
+    updated_at = Column(DateTime, nullable=False, default=now, onupdate=now)
     sold_at = Column(DateTime, nullable=True)
 
     pc = relationship("PC", back_populates="items")
 
     __table_args__ = (
-        CheckConstraint("item_type IN ('component', 'periphery')", name="ck_items_type"),
+        CheckConstraint(
+            "item_type IN ('component', 'periphery', 'service')", name="ck_items_type"
+        ),
         CheckConstraint("status IN ('in_stock', 'in_assembly', 'sold')", name="ck_items_status"),
         Index("ix_items_status_type", "status", "item_type"),
     )

@@ -15,15 +15,19 @@
   ::-webkit-scrollbar-thumb:hover{background:#334155;background-clip:content-box}
   input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   input[type=number]{-moz-appearance:textfield}
-  .fade-enter{transition:opacity .18s ease, transform .18s ease}
 </style>
 </head>
 
-<body class="min-h-screen text-slate-200 antialiased" x-data="astex()" x-init="init()" x-cloak>
+<body class="min-h-screen text-slate-200 antialiased" x-data="astex()" x-init="init()"
+      @keydown.window="hotkey($event)" x-cloak>
 
 <!-- ======================= ШАПКА ======================= -->
+<div x-show="loading" x-cloak class="fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden bg-slate-800">
+  <div class="h-full w-1/3 animate-pulse bg-gradient-to-r from-indigo-500 to-cyan-400"></div>
+</div>
+
 <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl">
-  <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3.5 sm:px-6">
+  <div class="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3.5 sm:px-6">
     <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 font-black text-white shadow-lg shadow-indigo-900/40">A</div>
     <div class="min-w-0">
       <h1 class="truncate text-[15px] font-semibold leading-tight text-white">ASTEX <span class="text-indigo-400">Stock</span></h1>
@@ -32,11 +36,27 @@
     <div class="ml-auto flex items-center gap-2">
       <span class="hidden items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-400 sm:flex">
         <span class="h-1.5 w-1.5 rounded-full" :class="online ? 'bg-emerald-400' : 'bg-rose-400'"></span>
-        <span x-text="online ? 'База подключена' : 'Нет связи с API'"></span>
+        <span x-text="online ? 'База подключена' : 'Нет связи с сервером'"></span>
       </span>
+      <button @click="exportExcel()"
+              class="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-600/10 px-3 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-600/20"
+              title="Выгрузить всю базу в Excel">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+        <span class="hidden sm:inline">Excel</span>
+      </button>
+      <button @click="openImport()"
+              class="grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 transition hover:border-slate-700 hover:text-white"
+              title="Загрузить товары из Excel">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 8l5-5 5 5M12 3v12"/></svg>
+      </button>
+      <button @click="help = true"
+              class="hidden h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 transition hover:border-slate-700 hover:text-white sm:grid"
+              title="Горячие клавиши (?)">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7v.3M12 17h.01"/></svg>
+      </button>
       <button @click="refresh()" :disabled="loading"
               class="grid h-9 w-9 place-items-center rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 transition hover:border-slate-700 hover:text-white disabled:opacity-40"
-              title="Обновить данные">
+              title="Обновить данные (R)">
         <svg class="h-4 w-4" :class="loading && 'animate-spin'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
       </button>
     </div>
@@ -46,73 +66,75 @@
 <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
 
   <!-- ======================= ДАШБОРД ======================= -->
-  <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <!-- ПК в наличии -->
-    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur transition hover:border-slate-700">
+  <section class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur transition hover:border-slate-700 sm:p-5">
       <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-indigo-500/10 blur-2xl"></div>
-      <div class="relative flex items-start justify-between">
+      <div class="relative flex items-start justify-between gap-2">
         <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">ПК в наличии</span>
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h8M8 10h8M8 14h4"/></svg>
         </span>
       </div>
-      <p class="relative mt-3 text-3xl font-bold tracking-tight text-white" x-text="stats.pcs_in_stock ?? 0"></p>
+      <p class="relative mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl" x-text="stats.pcs_in_stock ?? 0"></p>
       <p class="relative mt-1 text-xs text-slate-500">Продано сборок: <span class="text-slate-400" x-text="stats.pcs_sold ?? 0"></span></p>
     </div>
 
-    <!-- Товаров на складе -->
-    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur transition hover:border-slate-700">
+    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur transition hover:border-slate-700 sm:p-5">
       <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-cyan-500/10 blur-2xl"></div>
-      <div class="relative flex items-start justify-between">
+      <div class="relative flex items-start justify-between gap-2">
         <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Товаров на складе</span>
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-cyan-500/10 text-cyan-400">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-cyan-500/10 text-cyan-400">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
         </span>
       </div>
-      <p class="relative mt-3 text-3xl font-bold tracking-tight text-white" x-text="stats.items_in_stock ?? 0"></p>
+      <p class="relative mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl" x-text="stats.items_in_stock ?? 0"></p>
       <p class="relative mt-1 text-xs text-slate-500">В сборках: <span class="text-slate-400" x-text="stats.items_in_assembly ?? 0"></span></p>
     </div>
 
-    <!-- Оценка склада -->
-    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur transition hover:border-slate-700">
+    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur transition hover:border-slate-700 sm:p-5">
       <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-amber-500/10 blur-2xl"></div>
-      <div class="relative flex items-start justify-between">
+      <div class="relative flex items-start justify-between gap-2">
         <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Оценка склада</span>
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/10 text-amber-400">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-400">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
         </span>
       </div>
-      <p class="relative mt-3 text-3xl font-bold tracking-tight text-white" x-text="money(stats.stock_value)"></p>
+      <p class="relative mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl" x-text="money(stats.stock_value)"></p>
       <p class="relative mt-1 text-xs text-slate-500">Свободно: <span class="text-slate-400" x-text="money(stats.free_stock_value)"></span></p>
     </div>
 
-    <!-- Прибыль -->
-    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-5 backdrop-blur transition hover:border-slate-700">
+    <div class="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-4 backdrop-blur transition hover:border-slate-700 sm:p-5">
       <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl"></div>
-      <div class="relative flex items-start justify-between">
-        <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Прибыль с продаж</span>
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
+      <div class="relative flex items-start justify-between gap-2">
+        <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Прибыль с продаж<span class="ml-1 normal-case tracking-normal text-slate-600">· за всё время</span></span>
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h6v6"/></svg>
         </span>
       </div>
-      <p class="relative mt-3 text-3xl font-bold tracking-tight" :class="(stats.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="money(stats.profit)"></p>
+      <p class="relative mt-3 text-2xl font-bold tracking-tight sm:text-3xl" :class="(stats.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="money(stats.profit)"></p>
       <p class="relative mt-1 text-xs text-slate-500">Выручка: <span class="text-slate-400" x-text="money(stats.revenue)"></span></p>
     </div>
   </section>
 
   <!-- ======================= ВКЛАДКИ ======================= -->
-  <nav class="mt-7 flex flex-wrap items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1 backdrop-blur sm:inline-flex">
+  <nav class="mt-7 grid grid-cols-3 gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1 backdrop-blur sm:inline-flex">
     <button @click="tab='pcs'"
-            class="flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition sm:flex-none"
+            class="rounded-lg px-3 py-2 text-xs font-medium transition sm:px-4 sm:text-sm"
             :class="tab==='pcs' ? 'bg-indigo-500/15 text-indigo-300 ring-1 ring-inset ring-indigo-500/30' : 'text-slate-400 hover:text-slate-200'">
-      Готовые ПК и Сетапы
-      <span class="ml-1.5 rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="pcs.length"></span>
+      ПК и Сетапы
+      <span class="ml-1 rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="pcs.length"></span>
     </button>
     <button @click="tab='items'"
-            class="flex-1 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition sm:flex-none"
+            class="rounded-lg px-3 py-2 text-xs font-medium transition sm:px-4 sm:text-sm"
             :class="tab==='items' ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-inset ring-cyan-500/30' : 'text-slate-400 hover:text-slate-200'">
-      Склад товаров и Периферия
-      <span class="ml-1.5 rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="items.length"></span>
+      Склад
+      <span class="ml-1 rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="items.length"></span>
+    </button>
+    <button @click="tab='sales'; loadSales()"
+            class="rounded-lg px-3 py-2 text-xs font-medium transition sm:px-4 sm:text-sm"
+            :class="tab==='sales' ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30' : 'text-slate-400 hover:text-slate-200'">
+      Продажи
+      <span class="ml-1 rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="sales.count ?? 0"></span>
     </button>
   </nav>
 
@@ -133,16 +155,20 @@
       </div>
     </div>
 
-    <div x-show="!pcs.length" class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 px-6 py-16 text-center">
-      <p class="text-sm text-slate-400">Сборок пока нет</p>
-      <p class="mt-1 text-xs text-slate-600">Нажмите «Собрать ПК / Сетап», чтобы добавить первую конфигурацию</p>
+    <div x-show="!pcs.length && !loading" class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 px-6 py-16 text-center">
+      <svg class="mx-auto mb-3 h-10 w-10 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h8M8 10h8M8 14h4"/></svg>
+      <p class="text-sm font-medium text-slate-300" x-text="pcFilter==='all' ? 'Сборок пока нет' : 'В этом фильтре пусто'"></p>
+      <p class="mx-auto mt-1 max-w-sm text-xs text-slate-600" x-text="pcFilter==='all' ? 'Нажмите «Собрать ПК / Сетап» и добавьте первую конфигурацию. Детали можно взять со склада.' : 'Попробуйте переключить фильтр на «Все».'"></p>
+      <button x-show="pcFilter==='all'" @click="openPcCreate()"
+              class="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Собрать первый ПК
+      </button>
     </div>
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <template x-for="pc in pcs" :key="pc.id">
-        <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur transition hover:border-slate-700"
-                 :class="pc.status==='sold' && 'opacity-70'">
-          <!-- заголовок -->
+        <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur transition hover:border-slate-700">
           <div class="flex items-start gap-3 border-b border-slate-800/80 p-5">
             <div class="min-w-0 flex-1">
               <h3 class="truncate text-base font-semibold text-white" x-text="pc.name"></h3>
@@ -157,9 +183,8 @@
                   x-text="pc.status==='sold' ? 'Продан' : 'В наличии'"></span>
           </div>
 
-          <!-- состав -->
           <div class="flex-1 space-y-3 p-5">
-            <template x-for="grp in [{k:'component',t:'Комплектующие',c:'indigo'},{k:'periphery',t:'Периферия',c:'cyan'}]" :key="grp.k">
+            <template x-for="grp in [{k:'component',t:'Комплектующие'},{k:'periphery',t:'Периферия'}]" :key="grp.k">
               <div x-show="pc.items.some(i => i.item_type===grp.k)">
                 <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-600" x-text="grp.t"></p>
                 <div class="flex flex-wrap gap-1.5">
@@ -168,7 +193,10 @@
                           :class="grp.k==='component' ? 'border-indigo-500/20 bg-indigo-500/[0.07] text-indigo-200' : 'border-cyan-500/20 bg-cyan-500/[0.07] text-cyan-200'">
                       <span class="font-semibold opacity-60" x-text="cat(it.category)"></span>
                       <span class="truncate" x-text="it.name"></span>
-                      <span class="shrink-0 opacity-50" x-text="money(it.cost_price)"></span>
+                      <button x-show="pc.status!=='sold'" @click="editPartPrice(pc, it)"
+                              class="shrink-0 rounded px-1 opacity-60 transition hover:bg-white/10 hover:opacity-100"
+                              title="Изменить цену закупа" x-text="money(it.cost_price)"></button>
+                      <span x-show="pc.status==='sold'" class="shrink-0 opacity-50" x-text="money(it.cost_price)"></span>
                     </span>
                   </template>
                 </div>
@@ -177,17 +205,16 @@
             <p x-show="!pc.items.length" class="text-xs text-slate-600">Позиции не привязаны</p>
           </div>
 
-          <!-- экономика -->
           <div class="grid grid-cols-3 gap-px border-t border-slate-800/80 bg-slate-800/40 text-center">
-            <div class="bg-slate-900/70 px-3 py-3">
+            <div class="bg-slate-900/70 px-2 py-3">
               <p class="text-[10px] uppercase tracking-wider text-slate-600">Себестоимость</p>
               <p class="mt-1 text-sm font-semibold text-slate-300" x-text="money(pc.cost_price)"></p>
             </div>
-            <div class="bg-slate-900/70 px-3 py-3">
+            <div class="bg-slate-900/70 px-2 py-3">
               <p class="text-[10px] uppercase tracking-wider text-slate-600">Цена продажи</p>
               <p class="mt-1 text-sm font-semibold text-white" x-text="money(pc.sell_price)"></p>
             </div>
-            <div class="bg-slate-900/70 px-3 py-3">
+            <div class="bg-slate-900/70 px-2 py-3">
               <p class="text-[10px] uppercase tracking-wider text-slate-600">Маржа</p>
               <p class="mt-1 text-sm font-semibold" :class="pc.margin >= 0 ? 'text-emerald-400' : 'text-rose-400'">
                 <span x-text="money(pc.margin)"></span>
@@ -196,17 +223,38 @@
             </div>
           </div>
 
-          <!-- действия -->
-          <div class="flex gap-2 border-t border-slate-800/80 p-4">
-            <button @click="openPcEdit(pc)" :disabled="pc.status==='sold'"
-                    class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+          <!-- действия: в наличии -->
+          <div x-show="pc.status!=='sold'" class="flex flex-wrap gap-2 border-t border-slate-800/80 p-4">
+            <button @click="openPcEdit(pc)"
+                    class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-              Редактировать / Пересобрать
+              Пересобрать
             </button>
-            <button @click="sellPc(pc)" x-show="pc.status!=='sold'"
+            <button @click="copySpec(pc)" title="Скопировать состав для клиента"
+                    class="grid h-9 w-9 place-items-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button @click="deletePc(pc)" title="Удалить сборку"
+                    class="grid h-9 w-9 place-items-center rounded-lg border border-slate-800 text-slate-500 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-400">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            </button>
+            <button @click="sellPc(pc)"
                     class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
               Продать
+            </button>
+          </div>
+
+          <!-- действия: продан -->
+          <div x-show="pc.status==='sold'" class="flex flex-wrap gap-2 border-t border-slate-800/80 p-4">
+            <button @click="unsellPc(pc)"
+                    class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 3v6h6"/></svg>
+              Отменить продажу
+            </button>
+            <button @click="copySpec(pc)" title="Скопировать состав"
+                    class="grid h-9 w-9 place-items-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
           </div>
         </article>
@@ -222,93 +270,272 @@
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Оприходовать товар
       </button>
+      <button @click="openIntake()"
+              class="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M2 12h4M18 12h4"/></svg>
+        Принять б/у ПК на разбор
+      </button>
+      <button @click="openService()"
+              class="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-300 transition hover:bg-violet-500/20">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.5 2.5"/></svg>
+        Услуга
+      </button>
       <div class="relative ml-auto w-full sm:w-72">
         <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input x-model="search" type="search" placeholder="Поиск по названию…"
+        <input x-model="search" x-ref="searchBox" type="search" placeholder="Поиск… (нажмите / )"
                class="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-9 pr-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20">
       </div>
     </div>
 
     <div class="mb-4 flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
       <template x-for="f in itemFilters" :key="f.k">
-        <button @click="itemFilter=f.k; loadItems()" x-text="f.t"
+        <button @click="itemFilter=f.k; itemCategory='all'; loadItems()" x-text="f.t"
                 class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
                 :class="itemFilter===f.k ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-inset ring-cyan-500/30' : 'text-slate-400 hover:text-slate-200'"></button>
       </template>
     </div>
 
-    <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur">
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[820px] text-sm">
-          <thead>
-            <tr class="border-b border-slate-800 text-left text-[11px] uppercase tracking-wider text-slate-500">
-              <th class="px-4 py-3 font-medium">Наименование</th>
-              <th class="px-4 py-3 font-medium">Категория</th>
-              <th class="px-4 py-3 text-right font-medium">Закуп</th>
-              <th class="px-4 py-3 text-right font-medium">Розница</th>
-              <th class="px-4 py-3 font-medium">Статус</th>
-              <th class="px-4 py-3 font-medium">Расположение</th>
-              <th class="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800/70">
-            <template x-for="it in filteredItems" :key="it.id">
-              <tr class="transition hover:bg-slate-800/30">
-                <td class="max-w-[280px] px-4 py-3">
-                  <p class="truncate font-medium text-slate-200" x-text="it.name"></p>
-                  <p class="text-[11px] text-slate-600" x-text="'#' + it.id + ' · ' + (it.item_type==='component' ? 'Комплектующая' : 'Периферия')"></p>
-                </td>
-                <td class="px-4 py-3">
-                  <span class="rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset"
-                        :class="it.item_type==='component' ? 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/20' : 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/20'"
-                        x-text="cat(it.category)"></span>
-                </td>
-                <td class="px-4 py-3 text-right tabular-nums text-slate-300" x-text="money(it.cost_price)"></td>
-                <td class="px-4 py-3 text-right tabular-nums" :class="it.retail_price ? 'text-white' : 'text-slate-600'" x-text="it.retail_price ? money(it.retail_price) : '—'"></td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset" :class="statusClass(it.status)">
-                    <span class="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>
-                    <span x-text="statusText(it.status)"></span>
-                  </span>
-                </td>
-                <td class="max-w-[200px] px-4 py-3">
-                  <span class="truncate text-xs" :class="it.pc_name ? 'text-slate-400' : 'text-slate-600'" x-text="it.pc_name || 'Свободный склад'"></span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <div class="flex items-center justify-end gap-1.5">
-                    <button x-show="it.status==='in_stock'" @click="openItemEdit(it)"
-                            class="rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white" title="Редактировать">
+    <!-- подфильтр по категории -->
+    <div class="mb-4 flex flex-wrap items-center gap-1.5">
+      <span class="mr-1 text-[11px] uppercase tracking-wider text-slate-600">Категория</span>
+      <button @click="itemCategory='all'; loadItems()"
+              class="rounded-lg px-2.5 py-1 text-xs font-medium transition"
+              :class="itemCategory==='all' ? 'bg-slate-800 text-white ring-1 ring-inset ring-slate-700' : 'text-slate-500 hover:text-slate-300'">Все</button>
+      <template x-for="c in availableCategories" :key="c">
+        <button @click="itemCategory=c; loadItems()" x-text="cat(c)"
+                class="rounded-lg px-2.5 py-1 text-xs font-medium transition"
+                :class="itemCategory===c ? 'bg-slate-800 text-white ring-1 ring-inset ring-slate-700' : 'text-slate-500 hover:text-slate-300'"></button>
+      </template>
+    </div>
+
+    <!-- таблица (десктоп) -->
+    <div class="hidden overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur lg:block">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 text-left text-[11px] uppercase tracking-wider text-slate-500">
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('name')">Наименование <span class="text-cyan-400" x-text="sortIcon('name')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('category')">Категория <span class="text-cyan-400" x-text="sortIcon('category')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 text-right font-medium transition hover:text-slate-300" @click="sortBy('cost_price')">Закуп <span class="text-cyan-400" x-text="sortIcon('cost_price')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 text-right font-medium transition hover:text-slate-300" @click="sortBy('retail_price')">Розница <span class="text-cyan-400" x-text="sortIcon('retail_price')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('status')">Статус <span class="text-cyan-400" x-text="sortIcon('status')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('pc_name')">Расположение <span class="text-cyan-400" x-text="sortIcon('pc_name')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('purchased_at')">Куплена <span class="text-cyan-400" x-text="sortIcon('purchased_at')"></span></th>
+            <th class="cursor-pointer select-none px-4 py-3 font-medium transition hover:text-slate-300" @click="sortBy('updated_at')">Изменена <span class="text-cyan-400" x-text="sortIcon('updated_at')"></span></th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/70">
+          <template x-for="it in filteredItems" :key="it.id">
+            <tr class="transition hover:bg-slate-800/30">
+              <td class="max-w-[260px] px-4 py-3">
+                <p class="truncate font-medium text-slate-200" x-text="it.name"></p>
+                <p class="text-[11px] text-slate-600" x-text="'#' + it.id + ' · ' + (it.item_type==='component' ? 'Комплектующая' : 'Периферия')"></p>
+              </td>
+              <td class="px-4 py-3">
+                <span class="whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium ring-1 ring-inset"
+                      :class="it.item_type==='component' ? 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/20' : 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/20'"
+                      x-text="cat(it.category)"></span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-300" x-text="money(it.cost_price)"></td>
+              <td class="whitespace-nowrap px-4 py-3 text-right tabular-nums" :class="it.retail_price ? 'text-white' : 'text-slate-600'" x-text="it.retail_price ? money(it.retail_price) : '—'"></td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset" :class="statusClass(it.status)">
+                  <span class="h-1.5 w-1.5 rounded-full bg-current opacity-70"></span>
+                  <span x-text="statusText(it.status)"></span>
+                </span>
+              </td>
+              <td class="max-w-[180px] px-4 py-3">
+                <span class="block truncate text-xs" :class="it.pc_name ? 'text-slate-400' : 'text-slate-600'" x-text="it.pc_name || 'Свободный склад'"></span>
+                <span x-show="it.source_note" class="mt-0.5 block truncate text-[10px] text-amber-500/70" :title="it.source_note" x-text="'← ' + it.source_note"></span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-400" x-text="shortDate(it.purchased_at || it.created_at)"></td>
+              <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-500" x-text="shortDate(it.updated_at)"></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-1.5">
+                  <template x-if="it.status==='in_stock'">
+                    <div class="flex items-center gap-1.5">
+                      <button @click="openItemEdit(it)" title="Редактировать"
+                              class="grid h-8 w-8 place-items-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-400 transition hover:bg-slate-800 hover:text-white">
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                      </button>
+                      <button @click="deleteItem(it)" title="Удалить"
+                              class="grid h-8 w-8 place-items-center rounded-lg border border-slate-800 text-slate-500 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-400">
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                      </button>
+                      <button @click="openQuickSell(it)"
+                              class="whitespace-nowrap rounded-lg bg-emerald-600/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500">Продать</button>
+                    </div>
+                  </template>
+                  <template x-if="it.status==='in_assembly'">
+                    <button @click="openItemEdit(it)" title="Изменить цену, категорию, название"
+                            class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/20">
                       <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                      Изменить
                     </button>
-                    <button x-show="it.status==='in_stock'" @click="openQuickSell(it)"
-                            class="whitespace-nowrap rounded-lg bg-emerald-600/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500">
-                      Быстрая продажа
-                    </button>
-                    <span x-show="it.status!=='in_stock'" class="text-xs text-slate-700">—</span>
-                  </div>
-                </td>
-              </tr>
-            </template>
-            <tr x-show="!filteredItems.length">
-              <td colspan="7" class="px-4 py-16 text-center">
-                <p class="text-sm text-slate-400">Ничего не найдено</p>
-                <p class="mt-1 text-xs text-slate-600">Измените фильтр или оприходуйте новый товар</p>
+                  </template>
+                  <template x-if="it.status==='sold' && !it.pc_id">
+                    <button @click="unsellItem(it)"
+                            class="whitespace-nowrap rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white">Отменить продажу</button>
+                  </template>
+                  <template x-if="it.status==='sold' && it.pc_id">
+                    <span class="text-xs text-slate-700">—</span>
+                  </template>
+                </div>
               </td>
             </tr>
-          </tbody>
-        </table>
+          </template>
+          <tr x-show="!filteredItems.length && !loading">
+            <td colspan="9" class="px-4 py-16 text-center">
+              <svg class="mx-auto mb-3 h-10 w-10 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+              <p class="text-sm font-medium text-slate-300" x-text="search ? 'По запросу ничего не найдено' : (itemFilter==='all' && itemCategory==='all' ? 'На складе пусто' : 'В этом фильтре пусто')"></p>
+              <p class="mx-auto mt-1 max-w-md text-xs text-slate-600"
+                 x-text="search ? 'Проверьте написание или очистите поиск.' : (itemFilter==='all' && itemCategory==='all' ? 'Оприходуйте товар, примите б/у системник на разбор или загрузите список из Excel.' : 'Сбросьте фильтры, чтобы увидеть все позиции.')"></p>
+              <div class="mt-4 flex flex-wrap justify-center gap-2">
+                <button x-show="search" @click="search=''"
+                        class="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800">Очистить поиск</button>
+                <button x-show="!search && (itemFilter!=='all' || itemCategory!=='all')" @click="itemFilter='all'; itemCategory='all'; loadItems()"
+                        class="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800">Сбросить фильтры</button>
+                <button x-show="!search && itemFilter==='all' && itemCategory==='all'" @click="openItemCreate()"
+                        class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-cyan-500">Оприходовать товар</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- итог по текущей выборке -->
+    <div x-show="filteredItems.length" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-xs text-slate-500">
+      <span>Показано: <span class="font-semibold text-slate-300" x-text="filteredItems.length"></span> из <span x-text="items.length"></span></span>
+      <span>Сумма закупа: <span class="font-semibold text-slate-300" x-text="money(filteredCost)"></span></span>
+      <span x-show="search" class="text-cyan-400">по запросу «<span x-text="search"></span>»</span>
+    </div>
+
+    <!-- карточки (мобильные) -->
+    <div class="space-y-2 lg:hidden">
+      <template x-for="it in filteredItems" :key="'m' + it.id">
+        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-slate-100" x-text="it.name"></p>
+              <p class="mt-0.5 text-[11px] text-slate-600">
+                <span x-text="'#' + it.id"></span> · <span x-text="cat(it.category)"></span> ·
+                <span x-text="it.item_type==='component' ? 'комплектующая' : 'периферия'"></span>
+              </p>
+            </div>
+            <span class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ring-1 ring-inset" :class="statusClass(it.status)" x-text="statusText(it.status)"></span>
+          </div>
+          <div class="mt-3 flex items-center gap-4 text-xs">
+            <span class="text-slate-500">Закуп <span class="tabular-nums text-slate-300" x-text="money(it.cost_price)"></span></span>
+            <span class="text-slate-500" x-show="it.retail_price">Розница <span class="tabular-nums text-white" x-text="money(it.retail_price)"></span></span>
+          </div>
+          <p class="mt-1 truncate text-[11px]" :class="it.pc_name ? 'text-slate-500' : 'text-slate-600'" x-text="it.pc_name ? ('в сборке: ' + it.pc_name) : 'свободный склад'"></p>
+          <div class="mt-3 flex gap-2" x-show="it.status==='in_stock'">
+            <button @click="openQuickSell(it)" class="flex-1 rounded-lg bg-emerald-600/90 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500">Продать</button>
+            <button @click="openItemEdit(it)" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-400">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+            </button>
+            <button @click="deleteItem(it)" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-800 text-slate-500">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            </button>
+          </div>
+          <button x-show="it.status==='sold' && !it.pc_id" @click="unsellItem(it)"
+                  class="mt-3 w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300">Отменить продажу</button>
+        </div>
+      </template>
+      <div x-show="!filteredItems.length" class="rounded-2xl border border-dashed border-slate-800 px-6 py-16 text-center">
+        <p class="text-sm text-slate-400">Ничего не найдено</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ВКЛАДКА 3: ПРОДАЖИ ======================= -->
+  <section x-show="tab==='sales'" class="mt-5">
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-slate-900/50 p-1">
+        <template x-for="f in [{k:'today',t:'Сегодня'},{k:'week',t:'7 дней'},{k:'month',t:'30 дней'},{k:'all',t:'Всё время'}]" :key="f.k">
+          <button @click="setPeriod(f.k)" x-text="f.t"
+                  class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+                  :class="salesPeriod===f.k ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/30' : 'text-slate-400 hover:text-slate-200'"></button>
+        </template>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 p-1.5"
+           :class="salesPeriod==='custom' && 'ring-1 ring-inset ring-emerald-500/30'">
+        <span class="pl-1 text-[11px] uppercase tracking-wider text-slate-600">Период</span>
+        <input x-model="salesFrom" type="date"
+               class="rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-500/60">
+        <span class="text-slate-600">—</span>
+        <input x-model="salesTo" type="date"
+               class="rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-500/60">
+        <button @click="applyCustomPeriod()"
+                class="rounded-lg bg-emerald-600/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500">Показать</button>
+      </div>
+      <span class="text-xs text-slate-500">показано: <span class="text-slate-300" x-text="sales.period || '—'"></span></span>
+    </div>
+
+    <div class="mb-4 grid grid-cols-3 gap-3">
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+        <p class="text-[10px] uppercase tracking-wider text-slate-600">Выручка</p>
+        <p class="mt-1.5 text-lg font-bold text-white sm:text-2xl" x-text="money(sales.revenue)"></p>
+      </div>
+      <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+        <p class="text-[10px] uppercase tracking-wider text-slate-600">Себестоимость</p>
+        <p class="mt-1.5 text-lg font-bold text-slate-300 sm:text-2xl" x-text="money(sales.cost)"></p>
+      </div>
+      <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+        <p class="text-[10px] uppercase tracking-wider text-emerald-600/80">Прибыль</p>
+        <p class="mt-1.5 text-lg font-bold sm:text-2xl" :class="(sales.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="money(sales.profit)"></p>
+      </div>
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur">
+      <div class="divide-y divide-slate-800/70">
+        <template x-for="s in (sales.sales || [])" :key="s.kind + s.id">
+          <div class="flex flex-wrap items-center gap-3 p-4 transition hover:bg-slate-800/30">
+            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
+                  :class="s.kind==='pc' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-cyan-500/10 text-cyan-400'">
+              <svg x-show="s.kind==='pc'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>
+              <svg x-show="s.kind!=='pc'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/></svg>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-slate-100" x-text="s.name"></p>
+              <p class="text-[11px] text-slate-600"><span x-text="s.subtitle"></span> · <span x-text="datetime(s.sold_at)"></span></p>
+            </div>
+            <div class="flex items-center gap-5 text-right text-xs">
+              <div class="hidden sm:block">
+                <p class="text-[10px] uppercase tracking-wider text-slate-600">Закуп</p>
+                <p class="tabular-nums text-slate-400" x-text="money(s.cost)"></p>
+              </div>
+              <div>
+                <p class="text-[10px] uppercase tracking-wider text-slate-600">Продано за</p>
+                <p class="tabular-nums text-white" x-text="money(s.revenue)"></p>
+              </div>
+              <div class="min-w-[86px]">
+                <p class="text-[10px] uppercase tracking-wider text-slate-600">Прибыль</p>
+                <p class="font-semibold tabular-nums" :class="s.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'" x-text="money(s.profit)"></p>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div x-show="!(sales.sales || []).length && !loading" class="px-6 py-16 text-center">
+          <svg class="mx-auto mb-3 h-10 w-10 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h6v6"/></svg>
+          <p class="text-sm font-medium text-slate-300">За этот период продаж нет</p>
+          <p class="mx-auto mt-1 max-w-sm text-xs text-slate-600">Попробуйте выбрать период пошире — например, «Всё время».</p>
+          <button @click="setPeriod('all')" x-show="salesPeriod!=='all'"
+                  class="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800">Показать всё время</button>
+        </div>
       </div>
     </div>
   </section>
 </main>
 
 <!-- ======================= МОДАЛКА: СБОРКА ПК ======================= -->
-<div x-show="pcForm.open" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="pcForm.open=false">
-  <div class="mx-auto my-4 w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl" @click.outside="pcForm.open && (pcForm.open=false)">
+<div x-show="pcForm.open" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:p-4" @keydown.escape.window="pcForm.open=false">
+  <div class="mx-auto my-2 w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl sm:my-4" @click.outside="pcForm.open && (pcForm.open=false)">
     <form @submit.prevent="savePc()">
-      <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4 sm:px-6">
         <div>
-          <h2 class="text-base font-semibold text-white" x-text="pcForm.id ? 'Редактирование / пересборка' : 'Новая сборка ПК / Сетап'"></h2>
+          <h2 class="text-base font-semibold text-white" x-text="pcForm.id ? 'Пересборка / редактирование' : 'Новая сборка ПК / Сетап'"></h2>
           <p class="mt-0.5 text-xs text-slate-500" x-text="pcForm.id ? 'Убранные позиции вернутся на свободный склад' : 'Добавьте любое количество комплектующих и периферии'"></p>
         </div>
         <button type="button" @click="pcForm.open=false" class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-white">
@@ -316,7 +543,7 @@
         </button>
       </div>
 
-      <div class="max-h-[62vh] space-y-5 overflow-y-auto px-6 py-5">
+      <div class="max-h-[60vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div class="sm:col-span-2">
             <label class="mb-1.5 block text-xs font-medium text-slate-400">Название сборки *</label>
@@ -336,7 +563,7 @@
             <span class="rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="pcForm.parts.length + ' поз.'"></span>
             <div class="ml-auto flex items-center gap-2">
               <select @change="attachFromStock($event.target.value); $event.target.value=''"
-                      class="rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-300 outline-none focus:border-cyan-500/60">
+                      class="max-w-[190px] rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-300 outline-none focus:border-cyan-500/60">
                 <option value="">＋ Взять со склада</option>
                 <template x-for="s in freeStock" :key="s.id">
                   <option :value="s.id" x-text="cat(s.category) + ' · ' + s.name + ' · ' + money(s.cost_price)"></option>
@@ -345,7 +572,7 @@
               <button type="button" @click="addPart()"
                       class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/20">
                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                Добавить позицию
+                Позиция
               </button>
             </div>
           </div>
@@ -394,8 +621,7 @@
         </div>
       </div>
 
-      <!-- итог -->
-      <div class="flex flex-wrap items-center gap-4 border-t border-slate-800 bg-slate-950/40 px-6 py-4">
+      <div class="flex flex-wrap items-center gap-4 border-t border-slate-800 bg-slate-950/40 px-5 py-4 sm:px-6">
         <div class="flex flex-wrap gap-5 text-xs">
           <div>
             <p class="text-[10px] uppercase tracking-wider text-slate-600">Себестоимость</p>
@@ -416,7 +642,7 @@
                   class="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Отмена</button>
           <button type="submit" :disabled="saving"
                   class="rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-50"
-                  x-text="pcForm.id ? 'Сохранить пересборку' : 'Создать сборку'"></button>
+                  x-text="pcForm.id ? 'Сохранить' : 'Создать сборку'"></button>
         </div>
       </div>
     </form>
@@ -424,7 +650,7 @@
 </div>
 
 <!-- ======================= МОДАЛКА: ТОВАР ======================= -->
-<div x-show="itemForm.open" x-cloak class="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="itemForm.open=false">
+<div x-show="itemForm.open" x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="itemForm.open=false">
   <div class="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl" @click.outside="itemForm.open && (itemForm.open=false)">
     <form @submit.prevent="saveItem()">
       <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
@@ -458,7 +684,7 @@
           <input x-model="itemForm.name" required placeholder="Logitech G102 Lightsync"
                  class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-cyan-500/60 focus:ring-2 focus:ring-cyan-500/20">
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid gap-3" :class="itemForm.id ? 'grid-cols-2' : 'grid-cols-3'">
           <div>
             <label class="mb-1.5 block text-xs font-medium text-slate-400">Цена закупа *</label>
             <input x-model.number="itemForm.cost_price" type="number" min="0" step="1" required placeholder="0"
@@ -469,9 +695,27 @@
             <input x-model="itemForm.retail_price" type="number" min="0" step="1" placeholder="не задана"
                    class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm tabular-nums text-white placeholder-slate-600 outline-none focus:border-cyan-500/60">
           </div>
+          <div x-show="!itemForm.id">
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Количество</label>
+            <input x-model.number="itemForm.quantity" type="number" min="1" max="100" step="1"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm tabular-nums text-white outline-none focus:border-cyan-500/60">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Дата покупки</label>
+            <input x-model="itemForm.purchased_at" type="date"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500/60">
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Откуда пришла</label>
+            <input x-model="itemForm.source_note" placeholder="б/у ПК от клиента, поставщик…"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-cyan-500/60">
+          </div>
         </div>
         <p class="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
-          Товар попадёт на свободный склад со статусом «В наличии». Его можно продать в розницу или установить в сборку.
+          <span x-show="!itemForm.id">Товар попадёт на свободный склад со статусом «На складе». Количество больше 1 создаст несколько одинаковых позиций — каждую можно продать отдельно.</span>
+          <span x-show="itemForm.id">Изменения затронут только эту позицию. Если она стоит в сборке, себестоимость сборки пересчитается.</span>
         </p>
       </div>
       <div class="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/40 px-6 py-4">
@@ -490,7 +734,7 @@
   <div class="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl" @click.outside="sellForm.open && (sellForm.open=false)">
     <form @submit.prevent="confirmQuickSell()">
       <div class="border-b border-slate-800 px-6 py-4">
-        <h2 class="text-base font-semibold text-white">Быстрая продажа</h2>
+        <h2 class="text-base font-semibold text-white" x-text="sellForm.kind==='pc' ? 'Продажа сборки' : 'Быстрая продажа'"></h2>
         <p class="mt-0.5 truncate text-xs text-slate-500" x-text="sellForm.name"></p>
       </div>
       <div class="space-y-4 px-6 py-5">
@@ -500,14 +744,23 @@
         </div>
         <div>
           <label class="mb-1.5 block text-xs font-medium text-slate-400">Цена продажи *</label>
-          <input x-model.number="sellForm.price" type="number" min="0" step="1" required
-                 class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm tabular-nums text-white outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20">
+          <input x-model.number="sellForm.price" type="number" min="0" step="1" required x-ref="sellPrice"
+                 class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-lg font-semibold tabular-nums text-white outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20">
+        </div>
+        <div>
+          <label class="mb-1.5 block text-xs font-medium text-slate-400">Дата и время продажи</label>
+          <input x-model="sellForm.sold_at" type="datetime-local"
+                 class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20">
+          <p class="mt-1 text-[11px] text-slate-600">По умолчанию сейчас. Можно поставить задним числом.</p>
         </div>
         <div class="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 text-sm">
           <span class="text-slate-400">Прибыль со сделки</span>
           <span class="font-semibold tabular-nums" :class="(sellForm.price||0)-sellForm.cost_price >= 0 ? 'text-emerald-400' : 'text-rose-400'"
                 x-text="money((sellForm.price||0) - sellForm.cost_price)"></span>
         </div>
+        <p x-show="sellForm.kind==='pc'" class="text-xs text-slate-500">
+          Все <span x-text="sellForm.count"></span> позиций сборки спишутся со склада. Продажу можно отменить.
+        </p>
       </div>
       <div class="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/40 px-6 py-4">
         <button type="button" @click="sellForm.open=false"
@@ -519,6 +772,274 @@
   </div>
 </div>
 
+<!-- ======================= МОДАЛКА: ПРИХОД Б/У ПК НА РАЗБОР ======================= -->
+<div x-show="intakeForm.open" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:p-4" @keydown.escape.window="intakeForm.open=false">
+  <div class="mx-auto my-2 w-full max-w-4xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl sm:my-4" @click.outside="intakeForm.open && (intakeForm.open=false)">
+    <form @submit.prevent="saveIntake()">
+      <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4 sm:px-6">
+        <div>
+          <h2 class="text-base font-semibold text-white">Приём б/у ПК на разбор</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Комплектующие лягут на свободный склад по отдельности — карточка ПК не создаётся</p>
+        </div>
+        <button type="button" @click="intakeForm.open=false" class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-white">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="max-h-[60vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="sm:col-span-2">
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Откуда системник *</label>
+            <input x-model="intakeForm.source_note" required placeholder="Б/У ПК от клиента Асхат, +7 777 …"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20">
+            <p class="mt-1 text-[11px] text-slate-600">Запишется каждой детали — потом видно, из какого системника она пришла</p>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Дата покупки</label>
+            <input x-model="intakeForm.purchased_at" type="date"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/60">
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-2 flex flex-wrap items-center gap-2">
+            <h3 class="text-xs font-medium uppercase tracking-wider text-slate-500">Что внутри</h3>
+            <span class="rounded-md bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400" x-text="intakeForm.parts.length + ' поз.'"></span>
+            <button type="button" @click="addIntakePart()"
+                    class="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Позиция
+            </button>
+          </div>
+
+          <div class="space-y-2">
+            <div class="hidden grid-cols-12 gap-2 px-1 text-[10px] uppercase tracking-wider text-slate-600 sm:grid">
+              <span class="col-span-2">Тип</span><span class="col-span-2">Категория</span>
+              <span class="col-span-5">Наименование</span><span class="col-span-2 text-right">Закуп</span><span class="col-span-1"></span>
+            </div>
+            <template x-for="(p, i) in intakeForm.parts" :key="p.key">
+              <div class="grid grid-cols-2 items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-2 sm:grid-cols-12 sm:border-transparent sm:bg-transparent sm:p-0">
+                <select x-model="p.item_type" @change="syncCategory(p)"
+                        class="col-span-1 rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-2 text-xs text-slate-300 outline-none focus:border-amber-500/60 sm:col-span-2">
+                  <option value="component">Комплект.</option>
+                  <option value="periphery">Периферия</option>
+                </select>
+                <select x-model="p.category"
+                        class="col-span-1 rounded-lg border border-slate-700 bg-slate-950/60 px-2 py-2 text-xs text-slate-300 outline-none focus:border-amber-500/60 sm:col-span-2">
+                  <template x-for="c in categoriesFor(p.item_type)" :key="c"><option :value="c" x-text="cat(c)"></option></template>
+                </select>
+                <input x-model="p.name" placeholder="Наименование модели"
+                       class="col-span-2 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-white placeholder-slate-600 outline-none focus:border-amber-500/60 sm:col-span-5">
+                <input x-model.number="p.cost_price" type="number" min="0" step="1" placeholder="Закуп"
+                       class="col-span-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-right text-xs tabular-nums text-white placeholder-slate-600 outline-none focus:border-amber-500/60 sm:col-span-2">
+                <button type="button" @click="intakeForm.parts.splice(i,1)"
+                        class="col-span-2 grid h-9 place-items-center rounded-lg border border-slate-800 text-slate-500 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-400 sm:col-span-1 sm:w-full">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                </button>
+              </div>
+            </template>
+          </div>
+          <p class="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+            Пустые строки пропускаются. Закуп вбивайте по каждой детали — сумма ниже для контроля,
+            чтобы сойтись с ценой, за которую взяли системник.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4 border-t border-slate-800 bg-slate-950/40 px-5 py-4 sm:px-6">
+        <div>
+          <p class="text-[10px] uppercase tracking-wider text-slate-600">Сумма закупа (контроль)</p>
+          <p class="mt-0.5 text-lg font-bold text-amber-300" x-text="money(intakeCost)"></p>
+        </div>
+        <div class="ml-auto flex gap-2">
+          <button type="button" @click="intakeForm.open=false"
+                  class="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Отмена</button>
+          <button type="submit" :disabled="saving"
+                  class="rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-900/40 transition hover:from-amber-500 hover:to-amber-400 disabled:opacity-50">
+            Разобрать на склад
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ======================= МОДАЛКА: УСЛУГА ======================= -->
+<div x-show="serviceForm.open" x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="serviceForm.open=false">
+  <div class="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl" @click.outside="serviceForm.open && (serviceForm.open=false)">
+    <form @submit.prevent="saveService()">
+      <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+        <div>
+          <h2 class="text-base font-semibold text-white">Услуга</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Ремонт, чистка, установка ПО — сразу попадёт в продажи и прибыль</p>
+        </div>
+        <button type="button" @click="serviceForm.open=false" class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-white">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="space-y-4 px-6 py-5">
+        <div>
+          <label class="mb-1.5 block text-xs font-medium text-slate-400">Что сделали *</label>
+          <input x-model="serviceForm.name" required placeholder="Чистка от пыли и замена термопасты"
+                 class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Категория</label>
+            <select x-model="serviceForm.category"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-violet-500/60">
+              <template x-for="c in categoriesFor('service')" :key="c"><option :value="c" x-text="cat(c)"></option></template>
+            </select>
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Дата и время</label>
+            <input x-model="serviceForm.sold_at" type="datetime-local"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-white outline-none focus:border-violet-500/60">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Цена для клиента *</label>
+            <input x-model.number="serviceForm.price" type="number" min="0" step="1" required
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm tabular-nums text-white outline-none focus:border-violet-500/60">
+          </div>
+          <div>
+            <label class="mb-1.5 block text-xs font-medium text-slate-400">Расходы</label>
+            <input x-model.number="serviceForm.cost_price" type="number" min="0" step="1" placeholder="0"
+                   class="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm tabular-nums text-white placeholder-slate-600 outline-none focus:border-violet-500/60">
+            <p class="mt-1 text-[11px] text-slate-600">Термопаста, запчасть и т.п.</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2.5 text-sm">
+          <span class="text-slate-400">Прибыль с услуги</span>
+          <span class="font-semibold tabular-nums" :class="(serviceForm.price||0)-(serviceForm.cost_price||0) >= 0 ? 'text-violet-300' : 'text-rose-400'"
+                x-text="money((serviceForm.price||0) - (serviceForm.cost_price||0))"></span>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/40 px-6 py-4">
+        <button type="button" @click="serviceForm.open=false"
+                class="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Отмена</button>
+        <button type="submit" :disabled="saving"
+                class="rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:from-violet-500 hover:to-violet-400 disabled:opacity-50">Записать</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ======================= МОДАЛКА: ЗАГРУЗКА ИЗ EXCEL ======================= -->
+<div x-show="importForm.open" x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="importForm.open=false">
+  <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl" @click.outside="importForm.open && (importForm.open=false)">
+    <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <div>
+        <h2 class="text-base font-semibold text-white">Загрузка товаров из Excel</h2>
+        <p class="mt-0.5 text-xs text-slate-500">Позиции только добавляются — то, что уже на складе, не изменится</p>
+      </div>
+      <button @click="importForm.open=false" class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-white">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="space-y-4 px-6 py-5">
+      <div class="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-800 text-sm font-bold text-slate-300">1</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-slate-200">Скачайте шаблон и заполните его</p>
+          <p class="mt-0.5 text-xs text-slate-500">В нём уже готовы нужные колонки и пример заполнения</p>
+          <button @click="downloadTemplate()"
+                  class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+            Скачать шаблон
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-800 text-sm font-bold text-slate-300">2</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium text-slate-200">Выберите заполненный файл</p>
+          <label class="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-950/60 px-4 py-4 text-sm text-slate-400 transition hover:border-cyan-500/50 hover:text-cyan-300">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 8l5-5 5 5M12 3v12"/></svg>
+            <span x-text="importForm.fileName || 'Нажмите, чтобы выбрать файл .xlsx'"></span>
+            <input type="file" accept=".xlsx,.xlsm" class="hidden" @change="pickFile($event)">
+          </label>
+        </div>
+      </div>
+
+      <div x-show="importForm.checking" class="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">
+        Проверяю файл…
+      </div>
+
+      <template x-if="importForm.result">
+        <div class="space-y-3">
+          <div class="flex items-start gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-4">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-sm font-bold text-emerald-300">3</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-emerald-200">
+                Файл прочитан: <span x-text="importForm.result.would_create"></span> позиций
+                на <span x-text="money(importForm.result.total_cost)"></span>
+              </p>
+              <div class="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950/50 p-2 text-[11px]">
+                <template x-for="r in importForm.result.preview" :key="r.name + r.cost_price">
+                  <div class="flex justify-between gap-3 py-0.5">
+                    <span class="truncate text-slate-300"><span class="text-slate-600" x-text="cat(r.category)"></span> <span x-text="r.name"></span></span>
+                    <span class="shrink-0 tabular-nums text-slate-400" x-text="money(r.cost_price)"></span>
+                  </div>
+                </template>
+                <p x-show="importForm.result.would_create > importForm.result.preview.length"
+                   class="pt-1 text-slate-600" x-text="'…и ещё ' + (importForm.result.would_create - importForm.result.preview.length)"></p>
+              </div>
+            </div>
+          </div>
+
+          <div x-show="importForm.result.notes.length" class="rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
+            <p class="mb-1 text-xs font-semibold text-amber-300">Обратите внимание:</p>
+            <ul class="space-y-0.5 text-[11px] text-amber-200/80">
+              <template x-for="n in importForm.result.notes" :key="n"><li x-text="'• ' + n"></li></template>
+            </ul>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/40 px-6 py-4">
+      <button @click="importForm.open=false"
+              class="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Отмена</button>
+      <button @click="confirmImport()" :disabled="!importForm.result || saving"
+              class="rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-900/40 transition hover:from-cyan-500 hover:to-cyan-400 disabled:cursor-not-allowed disabled:opacity-40">
+        Загрузить на склад
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= МОДАЛКА: ГОРЯЧИЕ КЛАВИШИ ======================= -->
+<div x-show="help" x-cloak class="fixed inset-0 z-[65] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" @click="help=false" @keydown.escape.window="help=false">
+  <div class="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl" @click.stop>
+    <div class="mb-4 flex items-center justify-between">
+      <h3 class="text-base font-semibold text-white">Горячие клавиши</h3>
+      <button @click="help=false" class="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-800 hover:text-white">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="space-y-1.5 text-sm">
+      <template x-for="row in [
+        ['1','Вкладка «ПК и Сетапы»'],['2','Вкладка «Склад»'],['3','Вкладка «Продажи»'],
+        ['N','Создать: сборку или товар'],['B','Принять б/у ПК на разбор'],['U','Записать услугу'],
+        ['/','Перейти к поиску'],['R','Обновить данные'],['Esc','Закрыть окно'],['?','Эта подсказка']
+      ]" :key="row[0]">
+        <div class="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-slate-800/50">
+          <kbd class="grid h-6 min-w-[26px] place-items-center rounded border border-slate-700 bg-slate-800 px-1.5 font-mono text-[11px] text-slate-300" x-text="row[0]"></kbd>
+          <span class="text-slate-400" x-text="row[1]"></span>
+        </div>
+      </template>
+    </div>
+    <p class="mt-4 border-t border-slate-800 pt-3 text-[11px] text-slate-600">
+      Клавиши работают, когда курсор не в поле ввода. Раскладка не важна — нажимайте
+      те же клавиши в русской раскладке.
+    </p>
+  </div>
+</div>
+
 <!-- ======================= ПОДТВЕРЖДЕНИЕ ======================= -->
 <div x-show="ask.open" x-cloak class="fixed inset-0 z-[60] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" @keydown.escape.window="answer(false)">
   <div class="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
@@ -526,13 +1047,14 @@
     <p class="mt-2 text-sm leading-relaxed text-slate-400" x-text="ask.text"></p>
     <div class="mt-5 flex justify-end gap-2">
       <button @click="answer(false)" class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800">Отмена</button>
-      <button @click="answer(true)" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500" x-text="ask.ok"></button>
+      <button @click="answer(true)" class="rounded-lg px-4 py-2 text-sm font-semibold text-white transition"
+              :class="ask.danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'" x-text="ask.ok"></button>
     </div>
   </div>
 </div>
 
 <!-- ======================= ТОСТЫ ======================= -->
-<div class="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-80 flex-col gap-2">
+<div class="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[calc(100vw-2.5rem)] max-w-xs flex-col gap-2">
   <template x-for="t in toasts" :key="t.id">
     <div class="pointer-events-auto flex items-start gap-3 rounded-xl border p-3.5 shadow-2xl backdrop-blur"
          :class="t.type==='error' ? 'border-rose-500/30 bg-rose-950/80' : 'border-emerald-500/30 bg-emerald-950/80'">
@@ -557,13 +1079,29 @@
 const CURRENCY = '₸';
 
 const CATEGORY_LABELS = {
-  CPU: 'Процессор', GPU: 'Видеокарта', RAM: 'Память', SSD: 'Накопитель',
+  CPU: 'Процессор', GPU: 'Видеокарта', RAM: 'Оперативная память', SSD: 'SSD', HDD: 'Жёсткий диск',
   Motherboard: 'Мат. плата', PSU: 'Блок питания', Case: 'Корпус', Cooler: 'Охлаждение',
   Monitor: 'Монитор', Mouse: 'Мышь', Keyboard: 'Клавиатура', Headset: 'Наушники',
-  Speakers: 'Колонки', Microphone: 'Микрофон', Mousepad: 'Коврик', Other: 'Прочее'
+  Speakers: 'Колонки', Microphone: 'Микрофон', Mousepad: 'Коврик',
+  Repair: 'Ремонт', Maintenance: 'Обслуживание', Assembly: 'Сборка',
+  Diagnostics: 'Диагностика', Software: 'ПО и настройка',
+  Other: 'Прочее'
 };
-const COMPONENT_CATEGORIES = ['CPU','GPU','RAM','SSD','Motherboard','PSU','Case','Cooler','Other'];
+const COMPONENT_CATEGORIES = ['CPU','GPU','RAM','SSD','HDD','Motherboard','PSU','Case','Cooler','Other'];
 const PERIPHERY_CATEGORIES = ['Monitor','Mouse','Keyboard','Headset','Speakers','Microphone','Mousepad','Other'];
+const SERVICE_CATEGORIES = ['Repair','Maintenance','Assembly','Diagnostics','Software','Other'];
+
+// Локальные дата-время для полей <input type="datetime-local"> и <input type="date">
+function nowLocal() {
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+function todayLocal() { return nowLocal().slice(0, 10); }
+function daysAgoLocal(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
 
 async function api(url, options = {}) {
   const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
@@ -586,26 +1124,40 @@ function astex() {
     tab: 'pcs',
     stats: {},
     pcs: [], pcFilter: 'all',
-    items: [], itemFilter: 'all', search: '',
+    items: [], itemFilter: 'all', itemCategory: 'all', search: '',
+    sales: {}, salesPeriod: 'month', salesFrom: '', salesTo: '',
+    sortKey: 'id', sortDir: 'desc',
+    importForm: { open: false, file: null, fileName: '', checking: false, result: null },
+    help: false,
     toasts: [], seq: 0,
     itemFilters: [
       { k: 'all', t: 'Все' },
-      { k: 'component', t: 'Только Комплектующие' },
-      { k: 'periphery', t: 'Только Периферия' },
+      { k: 'component', t: 'Комплектующие' },
+      { k: 'periphery', t: 'Периферия' },
+      { k: 'service', t: 'Услуги' },
       { k: 'in_stock', t: 'В наличии' },
       { k: 'in_assembly', t: 'В сборках' },
       { k: 'sold', t: 'Продано' }
     ],
     pcForm: { open: false, id: null, name: '', sell_price: 0, parts: [] },
-    itemForm: { open: false, id: null, item_type: 'component', category: 'CPU', name: '', cost_price: 0, retail_price: '' },
-    sellForm: { open: false, id: null, name: '', cost_price: 0, price: 0 },
-    ask: { open: false, title: '', text: '', ok: 'Подтвердить', resolve: null },
+    itemForm: { open: false, id: null, item_type: 'component', category: 'CPU', name: '', cost_price: 0, retail_price: '', quantity: 1, source_note: '', purchased_at: '' },
+    sellForm: { open: false, kind: 'item', id: null, name: '', cost_price: 0, price: 0, count: 0, sold_at: '' },
+    intakeForm: { open: false, source_note: '', purchased_at: '', parts: [] },
+    serviceForm: { open: false, name: '', category: 'Repair', price: 0, cost_price: 0, sold_at: '' },
+    ask: { open: false, title: '', text: '', ok: 'Подтвердить', danger: false, resolve: null },
 
     // --- утилиты ---
     money(v) { return (Number(v) || 0).toLocaleString('ru-RU') + ' ' + CURRENCY; },
     date(v) { return v ? new Date(v).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'; },
+    datetime(v) { return v ? new Date(v).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'; },
+    shortDate(v) { return v ? new Date(v).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'; },
     cat(c) { return CATEGORY_LABELS[c] || c; },
-    categoriesFor(type) { return type === 'periphery' ? PERIPHERY_CATEGORIES : COMPONENT_CATEGORIES; },
+    categoriesFor(type) {
+      if (type === 'periphery') return PERIPHERY_CATEGORIES;
+      if (type === 'service') return SERVICE_CATEGORIES;
+      return COMPONENT_CATEGORIES;
+    },
+    typeLabel(t) { return { component: 'Комплектующая', periphery: 'Периферия', service: 'Услуга' }[t] || t; },
     syncCategory(row) {
       const allowed = this.categoriesFor(row.item_type);
       if (!allowed.includes(row.category)) row.category = allowed[0];
@@ -623,8 +1175,8 @@ function astex() {
       this.toasts.push({ id, text, type });
       setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
     },
-    confirm(title, text, ok = 'Подтвердить') {
-      return new Promise(resolve => { this.ask = { open: true, title, text, ok, resolve }; });
+    confirm(title, text, ok = 'Подтвердить', danger = false) {
+      return new Promise(resolve => { this.ask = { open: true, title, text, ok, danger, resolve }; });
     },
     answer(value) {
       const resolve = this.ask.resolve;
@@ -637,19 +1189,85 @@ function astex() {
     get freeStock() { return this.items.filter(i => i.status === 'in_stock'); },
     get filteredItems() {
       const q = this.search.trim().toLowerCase();
-      if (!q) return this.items;
-      return this.items.filter(i =>
-        i.name.toLowerCase().includes(q) ||
-        this.cat(i.category).toLowerCase().includes(q) ||
-        (i.pc_name || '').toLowerCase().includes(q));
+      let list = this.items;
+      if (q) {
+        list = list.filter(i =>
+          i.name.toLowerCase().includes(q) ||
+          this.cat(i.category).toLowerCase().includes(q) ||
+          (i.pc_name || '').toLowerCase().includes(q) ||
+          (i.source_note || '').toLowerCase().includes(q));
+      }
+      const k = this.sortKey, dir = this.sortDir === 'asc' ? 1 : -1;
+      return [...list].sort((a, b) => {
+        let x = a[k], y = b[k];
+        if (k === 'category') { x = this.cat(x); y = this.cat(y); }
+        if (k === 'pc_name') { x = x || ''; y = y || ''; }
+        if (x === null || x === undefined) x = '';
+        if (y === null || y === undefined) y = '';
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x).localeCompare(String(y), 'ru') * dir;
+      });
+    },
+    sortBy(key) {
+      if (this.sortKey === key) { this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc'; }
+      else { this.sortKey = key; this.sortDir = key === 'name' || key === 'category' ? 'asc' : 'desc'; }
+    },
+    sortIcon(key) { return this.sortKey !== key ? '' : (this.sortDir === 'asc' ? '↑' : '↓'); },
+
+    // Сколько всего денег в текущей выборке — полезно при фильтрах
+    get filteredCost() { return this.filteredItems.reduce((s, i) => s + (i.cost_price || 0), 0); },
+
+    // --- горячие клавиши ---
+    get anyModalOpen() {
+      return this.pcForm.open || this.itemForm.open || this.sellForm.open ||
+             this.intakeForm.open || this.serviceForm.open || this.importForm.open ||
+             this.ask.open || this.help;
+    },
+    hotkey(e) {
+      // Внутри полей ввода клавиши не перехватываем
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable) {
+        if (e.key === 'Escape') e.target.blur();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (this.anyModalOpen && e.key !== '?') return;
+
+      // Раскладку определяем по e.code — тогда клавиши работают и в русской, и в английской
+      const code = e.code || '';
+      const k = e.key.toLowerCase();
+      const is = (letter) => code === 'Key' + letter.toUpperCase();
+
+      if (k === '1' || code === 'Digit1') { this.tab = 'pcs'; }
+      else if (k === '2' || code === 'Digit2') { this.tab = 'items'; }
+      else if (k === '3' || code === 'Digit3') { this.tab = 'sales'; this.loadSales(); }
+      else if (is('N') || k === 'n') { this.tab === 'items' ? this.openItemCreate() : this.openPcCreate(); }
+      else if (is('B') || k === 'b') { this.tab = 'items'; this.openIntake(); }
+      else if (is('U') || k === 'u') { this.tab = 'items'; this.openService(); }
+      else if (is('R') || k === 'r') { this.refresh(); }
+      else if (k === '/' ) { e.preventDefault(); this.tab = 'items'; this.$nextTick(() => this.$refs.searchBox && this.$refs.searchBox.focus()); }
+      else if (e.key === '?') { this.help = !this.help; }
+      else return;
+      if (k !== '/') e.preventDefault();
     },
 
     // --- загрузка ---
-    async init() { await this.refresh(); },
+    async init() {
+      await this.refresh();
+      // Тихое обновление раз в минуту: если программа открыта на втором устройстве,
+      // цифры не будут расходиться.
+      setInterval(() => { if (!this.anyModalOpen && !document.hidden) this.silentRefresh(); }, 60000);
+    },
+    async silentRefresh() {
+      try {
+        await Promise.all([this.loadStats(), this.loadPcs(), this.loadItems(), this.loadSales()]);
+        this.online = true;
+      } catch (e) { this.online = false; }
+    },
     async refresh() {
       this.loading = true;
       try {
-        await Promise.all([this.loadStats(), this.loadPcs(), this.loadItems()]);
+        await Promise.all([this.loadStats(), this.loadPcs(), this.loadItems(), this.loadSales()]);
         this.online = true;
       } catch (e) {
         this.online = false;
@@ -657,14 +1275,33 @@ function astex() {
       } finally { this.loading = false; }
     },
     async loadStats() { this.stats = await api('/api/stats'); },
-    async loadPcs() {
-      this.pcs = await api('/api/pcs?status=' + this.pcFilter);
-    },
+    async loadPcs() { this.pcs = await api('/api/pcs?status=' + this.pcFilter); },
     async loadItems() {
-      const typeFilters = ['component', 'periphery'];
-      const type = typeFilters.includes(this.itemFilter) ? this.itemFilter : 'all';
+      const type = ['component', 'periphery', 'service'].includes(this.itemFilter) ? this.itemFilter : 'all';
       const status = ['in_stock', 'in_assembly', 'sold'].includes(this.itemFilter) ? this.itemFilter : 'all';
-      this.items = await api(`/api/items?type=${type}&status=${status}`);
+      this.items = await api(`/api/items?type=${type}&status=${status}&category=${this.itemCategory}`);
+    },
+    async loadSales() {
+      if (this.salesPeriod === 'custom') {
+        const from = this.salesFrom ? `&date_from=${this.salesFrom}` : '';
+        const to = this.salesTo ? `&date_to=${this.salesTo}` : '';
+        this.sales = await api(`/api/sales?period=custom${from}${to}`);
+      } else {
+        this.sales = await api('/api/sales?period=' + this.salesPeriod);
+      }
+    },
+    setPeriod(k) { this.salesPeriod = k; this.loadSales(); },
+    applyCustomPeriod() {
+      if (!this.salesFrom && !this.salesTo) { this.toast('Укажите хотя бы одну дату', 'error'); return; }
+      this.salesPeriod = 'custom'; this.loadSales();
+    },
+    // Категории, реально встречающиеся среди загруженных позиций — для подфильтра
+    get availableCategories() {
+      const base = this.itemFilter === 'periphery' ? PERIPHERY_CATEGORIES
+                 : this.itemFilter === 'service' ? SERVICE_CATEGORIES
+                 : this.itemFilter === 'component' ? COMPONENT_CATEGORIES
+                 : [...COMPONENT_CATEGORIES, ...PERIPHERY_CATEGORIES, ...SERVICE_CATEGORIES];
+      return [...new Set(base)];
     },
 
     // --- сборки ---
@@ -705,7 +1342,9 @@ function astex() {
         category: p.category,
         name: (p.name || '').trim(),
         cost_price: Number(p.cost_price) || 0,
-        retail_price: p.retail_price === '' || p.retail_price === null ? null : Number(p.retail_price)
+        retail_price: p.retail_price === '' || p.retail_price === null ? null : Number(p.retail_price),
+        source_note: (p.source_note || '').trim() || null,
+        purchased_at: p.purchased_at || null
       };
     },
     async savePc() {
@@ -719,7 +1358,7 @@ function astex() {
       try {
         if (this.pcForm.id) {
           await api('/api/pcs/' + this.pcForm.id, { method: 'PUT', body });
-          this.toast('Сборка пересобрана, снятые детали вернулись на склад');
+          this.toast('Сборка обновлена, снятые детали вернулись на склад');
         } else {
           await api('/api/pcs', { method: 'POST', body });
           this.toast('Сборка создана');
@@ -729,31 +1368,71 @@ function astex() {
       } catch (e) { this.toast(e.message, 'error'); }
       finally { this.saving = false; }
     },
-    async sellPc(pc) {
-      const ok = await this.confirm(
-        'Продать сборку?',
-        `«${pc.name}» уйдёт в статус «Продан», все ${pc.items.length} привязанных позиций спишутся со склада. Прибыль по сделке: ${this.money(pc.margin)}.`,
-        'Продать');
+    sellPc(pc) {
+      this.sellForm = { open: true, kind: 'pc', id: pc.id, name: pc.name, cost_price: pc.cost_price,
+                        price: pc.sell_price, count: pc.items.length, sold_at: nowLocal() };
+      this.$nextTick(() => this.$refs.sellPrice && this.$refs.sellPrice.select());
+    },
+    async unsellPc(pc) {
+      const ok = await this.confirm('Отменить продажу?', `«${pc.name}» вернётся в наличие, все его позиции — в сборку. Прибыль пересчитается.`, 'Отменить продажу');
       if (!ok) return;
       try {
-        await api('/api/pcs/' + pc.id + '/sell', { method: 'POST', body: JSON.stringify({}) });
-        this.toast('ПК продан, позиции списаны');
+        await api('/api/pcs/' + pc.id + '/unsell', { method: 'POST' });
+        this.toast('Продажа отменена, сборка снова в наличии');
         await this.refresh();
       } catch (e) { this.toast(e.message, 'error'); }
+    },
+    async deletePc(pc) {
+      const ok = await this.confirm('Удалить сборку?',
+        `«${pc.name}» будет удалена. ${pc.items.length} позиций не пропадут — они вернутся на свободный склад.`,
+        'Удалить', true);
+      if (!ok) return;
+      try {
+        await api('/api/pcs/' + pc.id, { method: 'DELETE' });
+        this.toast('Сборка удалена, детали на складе');
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+    },
+    async copySpec(pc) {
+      const lines = [pc.name, ''];
+      const groups = [['component', 'Комплектующие'], ['periphery', 'Периферия']];
+      for (const [kind, title] of groups) {
+        const list = pc.items.filter(i => i.item_type === kind);
+        if (!list.length) continue;
+        lines.push(title + ':');
+        list.forEach(i => lines.push('• ' + this.cat(i.category) + ': ' + i.name));
+        lines.push('');
+      }
+      lines.push('Цена: ' + this.money(pc.sell_price));
+      const text = lines.join('\n');
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        this.toast('Спецификация скопирована — можно вставить клиенту');
+      } catch (e) { this.toast('Не удалось скопировать', 'error'); }
     },
 
     // --- склад ---
     openItemCreate() {
-      this.itemForm = { open: true, id: null, item_type: 'component', category: 'CPU', name: '', cost_price: 0, retail_price: '' };
+      this.itemForm = { open: true, id: null, item_type: 'component', category: 'CPU', name: '',
+                        cost_price: 0, retail_price: '', quantity: 1, source_note: '', purchased_at: todayLocal() };
     },
     openItemEdit(it) {
       this.itemForm = {
         open: true, id: it.id, item_type: it.item_type, category: it.category,
-        name: it.name, cost_price: it.cost_price, retail_price: it.retail_price ?? ''
+        name: it.name, cost_price: it.cost_price, retail_price: it.retail_price ?? '', quantity: 1,
+        source_note: it.source_note ?? '', purchased_at: (it.purchased_at || '').slice(0, 10)
       };
     },
     async saveItem() {
-      const body = JSON.stringify(this.partPayload(this.itemForm));
+      const qty = Math.max(1, Math.min(100, Number(this.itemForm.quantity) || 1));
+      const body = JSON.stringify({ ...this.partPayload(this.itemForm), quantity: qty });
       this.saving = true;
       try {
         if (this.itemForm.id) {
@@ -761,25 +1440,160 @@ function astex() {
           this.toast('Товар обновлён');
         } else {
           await api('/api/items', { method: 'POST', body });
-          this.toast('Товар оприходован на склад');
+          this.toast(qty > 1 ? `Оприходовано ${qty} шт.` : 'Товар оприходован на склад');
         }
         this.itemForm.open = false;
         await this.refresh();
       } catch (e) { this.toast(e.message, 'error'); }
       finally { this.saving = false; }
     },
-    openQuickSell(it) {
-      this.sellForm = { open: true, id: it.id, name: it.name, cost_price: it.cost_price, price: it.retail_price ?? it.cost_price };
+    // --- приход б/у системника на разбор ---
+    openIntake() {
+      this.intakeForm = {
+        open: true, source_note: '', purchased_at: todayLocal(),
+        parts: ['CPU', 'Motherboard', 'RAM', 'SSD', 'GPU', 'PSU', 'Case']
+          .map(c => this.newPart({ category: c }))
+      };
     },
-    async confirmQuickSell() {
+    addIntakePart() { this.intakeForm.parts.push(this.newPart()); },
+    get intakeCost() { return this.intakeForm.parts.reduce((s, p) => s + (Number(p.cost_price) || 0), 0); },
+    async saveIntake() {
+      const parts = this.intakeForm.parts.filter(p => (p.name || '').trim());
+      if (!parts.length) { this.toast('Добавьте хотя бы одну комплектующую', 'error'); return; }
       this.saving = true;
       try {
-        await api('/api/items/' + this.sellForm.id + '/quick-sell', {
-          method: 'POST',
-          body: JSON.stringify({ price: Number(this.sellForm.price) || 0 })
-        });
+        const res = await api('/api/intake', { method: 'POST', body: JSON.stringify({
+          source_note: this.intakeForm.source_note.trim() || null,
+          purchased_at: this.intakeForm.purchased_at ? this.intakeForm.purchased_at + 'T12:00' : null,
+          parts: parts.map(p => this.partPayload(p))
+        }) });
+        this.intakeForm.open = false;
+        this.toast(`Системник разобран: ${res.created} комплектующих на складе`);
+        this.tab = 'items';
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+      finally { this.saving = false; }
+    },
+
+    // --- Excel ---
+    exportExcel() {
+      this.toast('Файл скачивается…');
+      window.location.href = '/api/export.xlsx';
+    },
+    downloadTemplate() { window.location.href = '/api/import-template.xlsx'; },
+    openImport() { this.importForm = { open: true, file: null, fileName: '', checking: false, result: null }; },
+    async pickFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.importForm.file = file;
+      this.importForm.fileName = file.name;
+      this.importForm.result = null;
+      await this.checkImport();
+    },
+    async checkImport() {
+      if (!this.importForm.file) return;
+      this.importForm.checking = true;
+      try {
+        const fd = new FormData();
+        fd.append('file', this.importForm.file);
+        const res = await fetch('/api/import?dry_run=true', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Не удалось прочитать файл');
+        this.importForm.result = data;
+      } catch (e) {
+        this.importForm.result = null;
+        this.toast(e.message, 'error');
+      } finally { this.importForm.checking = false; }
+    },
+    async confirmImport() {
+      if (!this.importForm.file) return;
+      this.saving = true;
+      try {
+        const fd = new FormData();
+        fd.append('file', this.importForm.file);
+        const res = await fetch('/api/import', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Ошибка загрузки');
+        this.importForm.open = false;
+        this.toast(`Загружено ${data.created} позиций на ${this.money(data.total_cost)}`);
+        this.tab = 'items';
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+      finally { this.saving = false; }
+    },
+
+    // --- разовая услуга ---
+    openService() {
+      this.serviceForm = { open: true, name: '', category: 'Repair', price: 0, cost_price: 0, sold_at: nowLocal() };
+    },
+    async saveService() {
+      this.saving = true;
+      try {
+        await api('/api/services/sell', { method: 'POST', body: JSON.stringify({
+          name: this.serviceForm.name.trim(),
+          category: this.serviceForm.category,
+          price: Number(this.serviceForm.price) || 0,
+          cost_price: Number(this.serviceForm.cost_price) || 0,
+          sold_at: this.serviceForm.sold_at || null
+        }) });
+        this.serviceForm.open = false;
+        this.toast('Услуга добавлена в продажи');
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+      finally { this.saving = false; }
+    },
+
+    // --- правка цены детали прямо в карточке сборки ---
+    async editPartPrice(pc, it) {
+      const raw = window.prompt(`Цена закупа: ${it.name}`, it.cost_price);
+      if (raw === null) return;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) { this.toast('Нужно неотрицательное число', 'error'); return; }
+      try {
+        await api('/api/items/' + it.id, { method: 'PUT', body: JSON.stringify({
+          item_type: it.item_type, category: it.category, name: it.name,
+          cost_price: value,
+          retail_price: it.retail_price ?? null
+        }) });
+        this.toast('Цена обновлена, себестоимость пересчитана');
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+    },
+
+    async deleteItem(it) {
+      const ok = await this.confirm('Удалить позицию?', `«${it.name}» будет удалена со склада безвозвратно.`, 'Удалить', true);
+      if (!ok) return;
+      try {
+        await api('/api/items/' + it.id, { method: 'DELETE' });
+        this.toast('Позиция удалена');
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+    },
+    async unsellItem(it) {
+      const ok = await this.confirm('Отменить продажу?', `«${it.name}» вернётся на свободный склад.`, 'Отменить продажу');
+      if (!ok) return;
+      try {
+        await api('/api/items/' + it.id + '/unsell', { method: 'POST' });
+        this.toast('Продажа отменена');
+        await this.refresh();
+      } catch (e) { this.toast(e.message, 'error'); }
+    },
+    openQuickSell(it) {
+      this.sellForm = { open: true, kind: 'item', id: it.id, name: it.name, cost_price: it.cost_price,
+                        price: it.retail_price ?? it.cost_price, count: 1, sold_at: nowLocal() };
+      this.$nextTick(() => this.$refs.sellPrice && this.$refs.sellPrice.select());
+    },
+    async confirmQuickSell() {
+      const url = this.sellForm.kind === 'pc'
+        ? '/api/pcs/' + this.sellForm.id + '/sell'
+        : '/api/items/' + this.sellForm.id + '/quick-sell';
+      this.saving = true;
+      try {
+        await api(url, { method: 'POST', body: JSON.stringify({
+          price: Number(this.sellForm.price) || 0,
+          sold_at: this.sellForm.sold_at || null }) });
         this.sellForm.open = false;
-        this.toast('Продано в розницу');
+        this.toast(this.sellForm.kind === 'pc' ? 'ПК продан, позиции списаны' : 'Продано в розницу');
         await this.refresh();
       } catch (e) { this.toast(e.message, 'error'); }
       finally { this.saving = false; }

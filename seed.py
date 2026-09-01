@@ -53,16 +53,20 @@ def main() -> None:
         db.add(pc)
         db.flush()
 
+        from models import now
+        moment = now()
         for item_type, category, name, cost, retail in DEMO_PC["parts"]:
             db.add(Item(
                 pc_id=pc.id, item_type=item_type, category=category, name=name,
                 cost_price=cost, retail_price=retail, status="in_assembly",
+                purchased_at=moment,
             ))
 
         for item_type, category, name, cost, retail in DEMO_STOCK:
             db.add(Item(
                 pc_id=None, item_type=item_type, category=category, name=name,
                 cost_price=cost, retail_price=retail, status="in_stock",
+                purchased_at=moment,
             ))
 
         db.commit()
